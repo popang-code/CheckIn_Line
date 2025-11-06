@@ -46,7 +46,7 @@
           await liff.sendMessages([{ type: "text", text: messageText }]);
           liff.closeWindow();
         }, err => {
-          alert("定位失敗：" + err.message);
+          alert("定位失敗：" + err.message+ " / " + err.message);
           liff.closeWindow();
         });
       }
