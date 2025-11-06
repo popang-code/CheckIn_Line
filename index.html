@@ -47,6 +47,7 @@
           liff.closeWindow();
         }, err => {
           alert("定位失敗：" + err.message+ " / " + err.message);
+          console.log(err);
           liff.closeWindow();
         });
       }
