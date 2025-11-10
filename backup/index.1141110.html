@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+</head>
+<body>
+  <h3>自動打卡中...</h3>
+    <script>
+      function haversineDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371e3;
+        const φ1 = lat1 * Math.PI / 180;
+        const φ2 = lat2 * Math.PI / 180;
+        const Δφ = (lat2 - lat1) * Math.PI / 180;
+        const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+        const a = Math.sin(Δφ / 2) ** 2 +
+                  Math.cos(φ1) * Math.cos(φ2) *
+                  Math.sin(Δλ / 2) ** 2;
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+      }
+
+      const checkinCenterLat = 22.582212;
+      const checkinCenterLon = 120.404301;
+      const maxDistance = 120; // meters
+
+      async function main() {
+        await liff.init({ liffId: "2008432102-M9Wgn3WG" });
+        if (!liff.isInClient()) {
+          alert("請在 LINE App 內開啟此連結");
+          return;
+        }
+
+        navigator.geolocation.getCurrentPosition(async pos => {
+          const { latitude, longitude } = pos.coords;
+          const distance = haversineDistance(latitude, longitude, checkinCenterLat, checkinCenterLon);
+
+          let messageText;
+          if (distance <= maxDistance) {
+            messageText = `✅ 打卡成功！\n📍 位置：${latitude}, ${longitude}\n距離中心：${distance.toFixed(2)} 公尺`;
+          } else {
+            messageText = `❌ 打卡失敗！\n📍 位置：${latitude}, ${longitude}\n距離中心：${distance.toFixed(2)} 公尺 (超出 ${maxDistance} 公尺範圍)`;
+          }
+
+          await liff.sendMessages([{ type: "text", text: messageText }]);
+          liff.closeWindow();
+        }, err => {
+          alert("定位失敗：" + err.message+ " / " + err.message);
+          console.log(err);
+          liff.closeWindow();
+        });
+      }
+
+      main().catch(err => alert("LIFF 初始化錯誤：" + err));
+    </script>
+</body>
+</html>

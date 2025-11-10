@@ -2,57 +2,150 @@
 <html>
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LIFF 打卡</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body {
+      text-align: center;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      padding: 20px;
+      background-color: #F0F2F5;
+    }
+    h3 {
+      color: #333;
+    }
+    #options {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 24px;
+      align-items: center;
+    }
+    .checkin-btn {
+      width: 80%;
+      max-width: 300px;
+      padding: 15px;
+      font-size: 1.1em;
+      font-weight: bold;
+      border-radius: 8px;
+      border: none;
+      color: white;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .checkin-btn:nth-child(1) { background-color: #00B900; }
+    .checkin-btn:nth-child(2) { background-color: #FFC300; }
+    .checkin-btn:nth-child(3) { background-color: #FF5733; }
+    .checkin-btn:hover {
+      opacity: 0.9;
+    }
+    #status {
+        margin-top: 30px;
+    }
+  </style>
 </head>
 <body>
-  <h3>自動打卡中...</h3>
-    <script>
-      function haversineDistance(lat1, lon1, lat2, lon2) {
-        const R = 6371e3;
-        const φ1 = lat1 * Math.PI / 180;
-        const φ2 = lat2 * Math.PI / 180;
-        const Δφ = (lat2 - lat1) * Math.PI / 180;
-        const Δλ = (lon2 - lon1) * Math.PI / 180;
+  <h3>打卡選項</h3>
+  <div id="options">
+    <button class="checkin-btn">上班</button>
+    <button class="checkin-btn">下班</button>
+    <button class="checkin-btn">加班</button>
+  </div>
+  <h3 id="status" style="display: none;"></h3>
 
-        const a = Math.sin(Δφ / 2) ** 2 +
-                  Math.cos(φ1) * Math.cos(φ2) *
-                  Math.sin(Δλ / 2) ** 2;
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
+  <script>
+    function haversineDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371e3; // metres
+      const φ1 = lat1 * Math.PI / 180;
+      const φ2 = lat2 * Math.PI / 180;
+      const Δφ = (lat2 - lat1) * Math.PI / 180;
+      const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+      const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                Math.cos(φ1) * Math.cos(φ2) *
+                Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+      return R * c;
+    }
+
+    const checkinCenterLat = 22.582212;
+    const checkinCenterLon = 120.404301;
+    const maxDistance = 120; // meters
+
+    async function handleCheckIn(option) {
+      document.getElementById('options').style.display = 'none';
+      const statusEl = document.getElementById('status');
+      statusEl.textContent = '定位中，請稍候...';
+      statusEl.style.display = 'block';
+
+      if (!liff.isInClient()) {
+        alert("請在 LINE App 內開啟此連結");
+        return;
       }
 
-      const checkinCenterLat = 22.582212;
-      const checkinCenterLon = 120.404301;
-      const maxDistance = 120; // meters
+      navigator.geolocation.getCurrentPosition(async pos => {
+        const { latitude, longitude } = pos.coords;
+        const distance = haversineDistance(latitude, longitude, checkinCenterLat, checkinCenterLon);
 
-      async function main() {
-        await liff.init({ liffId: "2008432102-M9Wgn3WG" });
-        if (!liff.isInClient()) {
-          alert("請在 LINE App 內開啟此連結");
-          return;
+        let messageText;
+        if (distance <= maxDistance) {
+          messageText = `✅ ${option}打卡成功！\n📍 經緯度：${latitude.toFixed(6)}, ${longitude.toFixed(6)}\n📏 距離中心：${distance.toFixed(2)} 公尺`;
+        } else {
+          messageText = `❌ ${option}打卡失敗！\n📍 經緯度：${latitude.toFixed(6)}, ${longitude.toFixed(6)}\n📏 距離中心：${distance.toFixed(2)} 公尺 (超出 ${maxDistance} 公尺範圍)`;
         }
 
-        navigator.geolocation.getCurrentPosition(async pos => {
-          const { latitude, longitude } = pos.coords;
-          const distance = haversineDistance(latitude, longitude, checkinCenterLat, checkinCenterLon);
+        try {
+            statusEl.textContent = '正在傳送訊息...';
+            await liff.sendMessages([{ type: "text", text: messageText }]);
+            liff.closeWindow();
+        } catch (err) {
+            alert("傳送訊息失敗：" + err);
+            liff.closeWindow();
+        }
+      }, err => {
+        let errorMsg = "定位失敗";
+        switch(err.code) {
+            case err.PERMISSION_DENIED:
+                errorMsg += ": 您拒絕了定位權限請求。";
+                break;
+            case err.POSITION_UNAVAILABLE:
+                errorMsg += ": 位置資訊無法取得。";
+                break;
+            case err.TIMEOUT:
+                errorMsg += ": 定位請求逾時。";
+                break;
+            case err.UNKNOWN_ERROR:
+                errorMsg += ": 發生未知錯誤。";
+                break;
+        }
+        alert(errorMsg);
+        console.error(err);
+        liff.closeWindow();
+      }, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+      });
+    }
 
-          let messageText;
-          if (distance <= maxDistance) {
-            messageText = `✅ 打卡成功！\n📍 位置：${latitude}, ${longitude}\n距離中心：${distance.toFixed(2)} 公尺`;
-          } else {
-            messageText = `❌ 打卡失敗！\n📍 位置：${latitude}, ${longitude}\n距離中心：${distance.toFixed(2)} 公尺 (超出 ${maxDistance} 公尺範圍)`;
-          }
-
-          await liff.sendMessages([{ type: "text", text: messageText }]);
-          liff.closeWindow();
-        }, err => {
-          alert("定位失敗：" + err.message+ " / " + err.message);
-          console.log(err);
-          liff.closeWindow();
+    async function main() {
+      try {
+        await liff.init({ liffId: "2008432102-M9Wgn3WG" });
+        const buttons = document.querySelectorAll('.checkin-btn');
+        buttons.forEach(button => {
+          button.addEventListener('click', () => {
+            handleCheckIn(button.textContent);
+          });
         });
+      } catch (err) {
+        alert("LIFF 初始化錯誤：" + err);
+        console.error(err);
       }
+    }
 
-      main().catch(err => alert("LIFF 初始化錯誤：" + err));
-    </script>
+    main();
+  </script>
 </body>
 </html>
