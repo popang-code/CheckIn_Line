@@ -54,113 +54,81 @@
   </div>
   <h3 id="status" style="display: none;"></h3>
 
-  <script>
-    function haversineDistance(lat1, lon1, lat2, lon2) {
-      const R = 6371e3; // metres
-      const φ1 = lat1 * Math.PI / 180;
-      const φ2 = lat2 * Math.PI / 180;
-      const Δφ = (lat2 - lat1) * Math.PI / 180;
-      const Δλ = (lon2 - lon1) * Math.PI / 180;
+<script>
 
-      const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-                Math.cos(φ1) * Math.cos(φ2) *
-                Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  function haversineDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371e3;
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
 
-      return R * c;
+    const a = Math.sin(Δφ/2)**2 +
+              Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
+
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  const checkinCenterLat = 22.582212;
+  const checkinCenterLon = 120.404301;
+  const maxDistance = 100;
+
+  let profile = null;   // 重點 1：宣告在外面
+
+  async function handleCheckIn(option) {
+
+    if (!profile) {
+      alert("尚未取得使用者資料，請重新開啟頁面");
+      return;
     }
 
-    const checkinCenterLat = 22.582212;
-    const checkinCenterLon = 120.404301;
-    const maxDistance = 100; // meters
-    let profile = null;   // 宣告在外面
+    navigator.geolocation.getCurrentPosition(async pos => {
 
-    async function handleCheckIn(option) {
-      document.getElementById('options').style.display = 'none';
-      const statusEl = document.getElementById('status');
-      statusEl.textContent = '定位中，請稍候...';
-      statusEl.style.display = 'block';
+      const latitude = pos.coords.latitude;
+      const longitude = pos.coords.longitude;
+      const distance = haversineDistance(latitude, longitude, checkinCenterLat, checkinCenterLon);
 
-      if (!liff.isInClient()) {
-        alert("請在 LINE App 內開啟此連結");
-        return;
-      }
-
-      navigator.geolocation.getCurrentPosition(async pos => {
-        const { latitude, longitude } = pos.coords;
-        const distance = haversineDistance(latitude, longitude, checkinCenterLat, checkinCenterLon);
-
-        let messageText;
-        if (distance <= maxDistance) {
-          messageText = `✅ ${option}打卡成功！\n📍 經緯度：${latitude.toFixed(6)}, ${longitude.toFixed(6)}\n📏 距離中心：${distance.toFixed(2)} 公尺`;
-        } else {
-          messageText = `❌ ${option}打卡失敗！\n📍 經緯度：${latitude.toFixed(6)}, ${longitude.toFixed(6)}\n📏 距離中心：${distance.toFixed(2)} 公尺 (超出 ${maxDistance} 公尺範圍)`;
-        }
-
-        try {
-          await fetch("http://localhost:5678/webhook/e25e3f69-a0cd-439b-9a62-c01f2ea6da66", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              userId: profile.userId,
-              option,
-              latitude,
-              longitude,
-              distance,
-              timestamp: Date.now()
-            })
-          });
-
-          liff.closeWindow();
-        } catch (err) {
-            alert("傳送訊息失敗：" + err);
-            liff.closeWindow();
-        }
-      }, err => {
-        let errorMsg = "定位失敗";
-        switch(err.code) {
-            case err.PERMISSION_DENIED:
-                errorMsg += ": 您拒絕了定位權限請求。";
-                break;
-            case err.POSITION_UNAVAILABLE:
-                errorMsg += ": 位置資訊無法取得。";
-                break;
-            case err.TIMEOUT:
-                errorMsg += ": 定位請求逾時。";
-                break;
-            case err.UNKNOWN_ERROR:
-                errorMsg += ": 發生未知錯誤。";
-                break;
-        }
-        alert(errorMsg);
-        console.error(err);
-        liff.closeWindow();
-      }, {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0
-      });
-    }
-
-    async function main() {
       try {
-        await liff.init({ liffId: "2008432102-M9Wgn3WG" });
-
-        const profile = await liff.getProfile();
-
-        const buttons = document.querySelectorAll('.checkin-btn');
-        buttons.forEach(button => {
-          button.addEventListener('click', () => {
-            handleCheckIn(button.textContent);
-          });
+        await fetch("http://localhost:5678/webhook/e25e3f69-a0cd-439b-9a62-c01f2ea6da66", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: profile.userId,     // 重點 2：profile 一定存在
+            option,
+            latitude,
+            longitude,
+            distance,
+            timestamp: Date.now()
+          })
         });
-      } catch (err) {
-        alert("LIFF 初始化錯誤：" + err);
-        console.error(err);
-      }
-    }
 
-    main();
-  </script>
+        liff.closeWindow();
+      } catch (err) {
+        alert("傳送訊息錯誤：" + err);
+      }
+    });
+  }
+
+  async function main() {
+    try {
+      await liff.init({ liffId: "2008432102-M9Wgn3WG" });
+
+      profile = await liff.getProfile();   // 重點 3：一定要放在這裡
+      console.log("PROFILE:", profile);
+
+      document.querySelectorAll('.checkin-btn').forEach(button => {
+        button.addEventListener('click', () => {
+          handleCheckIn(button.textContent);
+        });
+      });
+
+    } catch (err) {
+      alert("LIFF 初始化錯誤：" + err);
+    }
+  }
+
+  main();  // 重點 4：呼叫 main()
+
+</script>
 </body>
 </html>
