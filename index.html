@@ -73,7 +73,7 @@
     const checkinCenterLat = 22.582212;
     const checkinCenterLon = 120.404301;
     const maxDistance = 100; // meters
-    const profile = await liff.getProfile();
+    let profile = null;   // 宣告在外面
 
     async function handleCheckIn(option) {
       document.getElementById('options').style.display = 'none';
@@ -145,6 +145,9 @@
     async function main() {
       try {
         await liff.init({ liffId: "2008432102-M9Wgn3WG" });
+
+        const profile = await liff.getProfile();
+
         const buttons = document.querySelectorAll('.checkin-btn');
         buttons.forEach(button => {
           button.addEventListener('click', () => {
