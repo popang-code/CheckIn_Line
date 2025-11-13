@@ -72,7 +72,8 @@
 
     const checkinCenterLat = 22.582212;
     const checkinCenterLon = 120.404301;
-    const maxDistance = 120; // meters
+    const maxDistance = 100; // meters
+    const profile = await liff.getProfile();
 
     async function handleCheckIn(option) {
       document.getElementById('options').style.display = 'none';
@@ -97,9 +98,20 @@
         }
 
         try {
-            statusEl.textContent = '正在傳送訊息...';
-            await liff.sendMessages([{ type: "text", text: messageText }]);
-            liff.closeWindow();
+          await fetch("http://localhost:5678/webhook/e25e3f69-a0cd-439b-9a62-c01f2ea6da66", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId: profile.userId,
+              option,
+              latitude,
+              longitude,
+              distance,
+              timestamp: Date.now()
+            })
+          });
+
+          liff.closeWindow();
         } catch (err) {
             alert("傳送訊息失敗：" + err);
             liff.closeWindow();
