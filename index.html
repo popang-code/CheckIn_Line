@@ -8,127 +8,110 @@
   <style>
     body {
       text-align: center;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto;
       padding: 20px;
       background-color: #F0F2F5;
     }
-    h3 {
-      color: #333;
-    }
+    h3 { color:#333; }
+
     #options {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      margin-top: 24px;
-      align-items: center;
+      display:flex; flex-direction:column; gap:12px;
+      margin-top:24px; align-items:center;
     }
     .checkin-btn {
-      width: 80%;
-      max-width: 300px;
-      padding: 15px;
-      font-size: 1.1em;
-      font-weight: bold;
-      border-radius: 8px;
-      border: none;
-      color: white;
-      cursor: pointer;
-      transition: background-color 0.2s;
+      width:80%; max-width:300px; padding:15px;
+      font-size:1.1em; font-weight:bold;
+      border-radius:8px; border:none; color:white;
     }
-    .checkin-btn:nth-child(1) { background-color: #00B900; }
-    .checkin-btn:nth-child(2) { background-color: #FFC300; }
-    .checkin-btn:nth-child(3) { background-color: #FF5733; }
-    .checkin-btn:hover {
-      opacity: 0.9;
-    }
-    #status {
-        margin-top: 30px;
-    }
+    .checkin-btn:nth-child(1){ background:#00B900; }
+    .checkin-btn:nth-child(2){ background:#FFC300; }
+    .checkin-btn:nth-child(3){ background:#FF5733; }
+
+    #status { margin-top:30px; font-size:1.1em; }
   </style>
 </head>
 <body>
-  <h3>打卡選項</h3>
-  <div id="options">
-    <button class="checkin-btn">上班</button>
-    <button class="checkin-btn">下班</button>
-    <button class="checkin-btn">加班</button>
-  </div>
-  <h3 id="status" style="display: none;"></h3>
+
+<h3>打卡選項</h3>
+
+<div id="options">
+  <button class="checkin-btn">上班</button>
+  <button class="checkin-btn">下班</button>
+  <button class="checkin-btn">加班</button>
+</div>
+
+<h3 id="status" style="display:none;">打卡鐘請稍等...</h3>
 
 <script>
 
-  function haversineDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371e3;
-    const φ1 = lat1 * Math.PI / 180;
-    const φ2 = lat2 * Math.PI / 180;
-    const Δφ = (lat2 - lat1) * Math.PI / 180;
-    const Δλ = (lon2 - lon1) * Math.PI / 180;
+const CHECKIN_API = "https://xxx.ngrok-free.app/webhook/你的ID";
+const CENTER_LAT = 22.582212;
+const CENTER_LON = 120.404301;
 
-    const a = Math.sin(Δφ/2)**2 +
-              Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
+let profile = null;
 
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+async function handleCheckIn(option) {
+
+  // 隱藏按鈕，顯示「打卡中」
+  document.getElementById("options").style.display = "none";
+  const status = document.getElementById("status");
+  status.style.display = "block";
+  status.textContent = "打卡鐘請稍等...";
+
+  if (!profile) {
+    alert("LIFF 尚未載入，請重新開啟頁面");
+    return;
   }
 
-  const checkinCenterLat = 22.582212;
-  const checkinCenterLon = 120.404301;
-  const maxDistance = 100;
+  navigator.geolocation.getCurrentPosition(async pos => {
 
-  let profile = null;   // 重點 1：宣告在外面
+    const lat = pos.coords.latitude;
+    const lon = pos.coords.longitude;
+    const token = liff.getAccessToken();  // 防偽造（重要！）
 
-  async function handleCheckIn(option) {
-
-    if (!profile) {
-      alert("尚未取得使用者資料，請重新開啟頁面");
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(async pos => {
-
-      const latitude = pos.coords.latitude;
-      const longitude = pos.coords.longitude;
-      const distance = haversineDistance(latitude, longitude, checkinCenterLat, checkinCenterLon);
-
-      try {
-        await fetch("https://5d324214eea6.ngrok-free.app/webhook/e25e3f69-a0cd-439b-9a62-c01f2ea6da66", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId: profile.userId,     // 重點 2：profile 一定存在
-            option,
-            latitude,
-            longitude,
-            distance,
-            timestamp: Date.now()
-          })
-        });
-
-        liff.closeWindow();
-      } catch (err) {
-        alert("傳送訊息錯誤：" + err);
-      }
-    });
-  }
-
-  async function main() {
     try {
-      await liff.init({ liffId: "2008432102-M9Wgn3WG" });
-
-      profile = await liff.getProfile();   // 重點 3：一定要放在這裡
-      console.log("PROFILE:", profile);
-
-      document.querySelectorAll('.checkin-btn').forEach(button => {
-        button.addEventListener('click', () => {
-          handleCheckIn(button.textContent);
-        });
+      // 將 GPS、option、token 等送到你的 n8n API
+      const res = await fetch(CHECKIN_API, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({
+          userId: profile.userId,
+          option,
+          lat,
+          lon,
+          token,
+          ts: Date.now()
+        })
       });
 
-    } catch (err) {
-      alert("LIFF 初始化錯誤：" + err);
-    }
-  }
+      const data = await res.json();
 
-  main();  // 重點 4：呼叫 main()
+      // 顯示後端回傳結果
+      alert(data.message);
+
+      liff.closeWindow();
+
+    } catch(err){
+      alert("打卡發生錯誤：" + err);
+      liff.closeWindow();
+    }
+
+  });
+
+}
+
+async function main(){
+  await liff.init({ liffId:"2008432102-M9Wgn3WG" });
+  profile = await liff.getProfile();
+
+  document.querySelectorAll(".checkin-btn").forEach(btn => {
+    btn.addEventListener("click",()=>handleCheckIn(btn.textContent));
+  });
+}
+
+main();
 
 </script>
+
 </body>
 </html>
